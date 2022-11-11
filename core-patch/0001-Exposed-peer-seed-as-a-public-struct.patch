@@ -1,0 +1,36 @@
+From 4c6a56c27d81139b4337091d0354cb2ec2294f1d Mon Sep 17 00:00:00 2001
+From: Akilan <me@akilan.io>
+Date: Fri, 28 Oct 2022 19:32:12 +0400
+Subject: [PATCH] Exposed peer seed as a public struct
+
+---
+ Config.go | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Config.go b/Config.go
+index 8791cc9..7521f12 100644
+--- a/Config.go
++++ b/Config.go
+@@ -43,7 +43,7 @@ type Config struct {
+ 	PrivateKey string `yaml:"PrivateKey"` // The Private Key, hex encoded so it can be copied manually
+ 
+ 	// Initial peer seed list
+-	SeedList           []peerSeed `yaml:"SeedList"`
++	SeedList           []PeerSeed `yaml:"SeedList"`
+ 	AutoUpdateSeedList bool       `yaml:"AutoUpdateSeedList"`
+ 	SeedListVersion    int        `yaml:"SeedListVersion"`
+ 
+@@ -61,8 +61,8 @@ type Config struct {
+ 	LimitTotalRecords  uint64 `yaml:"LimitTotalRecords"`  // Record count limit. 0 = unlimited. Max Records * Max Block Size = Size Limit.
+ }
+ 
+-// peerSeed is a singl peer entry from the config's seed list
+-type peerSeed struct {
++// PeerSeed is a singl peer entry from the config's seed list
++type PeerSeed struct {
+ 	PublicKey string   `yaml:"PublicKey"` // Public key = peer ID. Hex encoded.
+ 	Address   []string `yaml:"Address"`   // IP:Port
+ }
+-- 
+2.37.0 (Apple Git-136)
+

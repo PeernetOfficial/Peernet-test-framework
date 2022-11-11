@@ -1,0 +1,1114 @@
+From 5bc7c1bb3e79003db9bd1ac0962baa5805e0f422 Mon Sep 17 00:00:00 2001
+From: Akilan <me@akilan.io>
+Date: Fri, 11 Nov 2022 21:22:38 +0000
+Subject: [PATCH] Made certain variables public in the struct WebAPIInstance
+
+---
+ Blockchain User.go        | 10 ++++-----
+ Bootstrap.go              |  4 ++--
+ Command Traverse.go       |  4 ++--
+ Commands.go               |  2 +-
+ Connection.go             |  2 +-
+ Message Send.go           |  8 +++----
+ Network IPv4 Broadcast.go |  2 +-
+ Network IPv6 Multicast.go |  2 +-
+ Network.go                | 10 ++++-----
+ Peer ID.go                | 14 ++++++------
+ Peernet.go                |  4 ++--
+ webapi/API.go             |  4 ++--
+ webapi/Blockchain.go      | 12 +++++------
+ webapi/Download.go        | 14 ++++++------
+ webapi/File Detection.go  |  4 ++--
+ webapi/File IO.go         | 42 ++++++++++++++++++++----------------
+ webapi/File.go            | 42 +++++++++++++++++++-----------------
+ webapi/Profile.go         | 16 +++++++-------
+ webapi/Search Dispatch.go | 10 ++++-----
+ webapi/Search.go          | 45 ++++++++++++++++++++++-----------------
+ webapi/Shared Recent.go   |  2 +-
+ webapi/Status.go          | 16 +++++++-------
+ webapi/Warehouse.go       | 41 +++++++++++++++++++----------------
+ 23 files changed, 164 insertions(+), 146 deletions(-)
+
+diff --git a/Blockchain User.go b/Blockchain User.go
+index de6f64a..af12eb6 100644
+--- a/Blockchain User.go	
++++ b/Blockchain User.go	
+@@ -18,7 +18,7 @@ import (
+ // If it is corrupted, it will log the error and exit the process.
+ func (backend *Backend) initUserBlockchain() {
+ 	var err error
+-	backend.UserBlockchain, err = blockchain.Init(backend.peerPrivateKey, backend.Config.BlockchainMain)
++	backend.UserBlockchain, err = blockchain.Init(backend.PeerPrivateKey, backend.Config.BlockchainMain)
+ 
+ 	if err != nil {
+ 		backend.LogError("initUserBlockchain", "error: %s\n", err.Error())
+@@ -32,7 +32,7 @@ func (backend *Backend) userBlockchainUpdateSearchIndex() {
+ 
+ 		if newVersion != oldVersion || newHeight < oldHeight {
+ 			// invalidate search index data for the user's blockchain
+-			backend.SearchIndex.UnindexBlockchain(backend.peerPublicKey)
++			backend.SearchIndex.UnindexBlockchain(backend.PeerPublicKey)
+ 
+ 			// reindex everything
+ 			for blockN := uint64(0); blockN < newHeight; blockN++ {
+@@ -41,7 +41,7 @@ func (backend *Backend) userBlockchainUpdateSearchIndex() {
+ 					continue
+ 				}
+ 
+-				backend.SearchIndex.IndexNewBlock(backend.peerPublicKey, newVersion, blockN, raw)
++				backend.SearchIndex.IndexNewBlock(backend.PeerPublicKey, newVersion, blockN, raw)
+ 			}
+ 
+ 			return
+@@ -55,7 +55,7 @@ func (backend *Backend) userBlockchainUpdateSearchIndex() {
+ 					continue
+ 				}
+ 
+-				backend.SearchIndex.IndexNewBlock(backend.peerPublicKey, newVersion, blockN, raw)
++				backend.SearchIndex.IndexNewBlock(backend.PeerPublicKey, newVersion, blockN, raw)
+ 			}
+ 		}
+ 	}
+@@ -64,7 +64,7 @@ func (backend *Backend) userBlockchainUpdateSearchIndex() {
+ // ReadBlock reads a block and decodes the records. This may be a block of the user's blockchain, or any other that is cached in the global blockchain cache.
+ func (backend *Backend) ReadBlock(PublicKey *btcec.PublicKey, Version, BlockNumber uint64) (decoded *blockchain.BlockDecoded, raw []byte, found bool, err error) {
+ 	// requesting a block from the user's blockchain?
+-	if PublicKey.IsEqual(backend.peerPublicKey) {
++	if PublicKey.IsEqual(backend.PeerPublicKey) {
+ 		_, _, version := backend.UserBlockchain.Header()
+ 		if Version != version {
+ 			return nil, nil, false, nil
+diff --git a/Bootstrap.go b/Bootstrap.go
+index 664926a..3fc14a9 100644
+--- a/Bootstrap.go
++++ b/Bootstrap.go
+@@ -56,7 +56,7 @@ loopSeedList:
+ 			continue
+ 		}
+ 
+-		if peer.publicKey.IsEqual(backend.peerPublicKey) { // skip if self
++		if peer.publicKey.IsEqual(backend.PeerPublicKey) { // skip if self
+ 			continue
+ 		}
+ 
+@@ -287,7 +287,7 @@ func (backend *Backend) isReturnedPeerBadQuality(record *protocol.PeerRecord) bo
+ 	}
+ 
+ 	// Must not be self. There is no point that a remote peer would return self
+-	if record.PublicKey.IsEqual(backend.peerPublicKey) {
++	if record.PublicKey.IsEqual(backend.PeerPublicKey) {
+ 		//fmt.Printf("IsReturnedPeerBadQuality received self peer\n")
+ 		return true
+ 	}
+diff --git a/Command Traverse.go b/Command Traverse.go
+index 7d18eec..6c4a18c 100644
+--- a/Command Traverse.go	
++++ b/Command Traverse.go	
+@@ -99,13 +99,13 @@ func (peer *PeerInfo) cmdTraverseReceive(msg *protocol.MessageTraverse) {
+ 
+ 	// ---- fork packetWorker to decode and validate embedded packet ---
+ 	// Due to missing connection and other embedded details in the message (such as ports), the packet is not just simply queued to rawPacketsIncoming.
+-	decoded, senderPublicKey, err := protocol.PacketDecrypt(msg.EmbeddedPacketRaw, peer.Backend.peerPublicKey)
++	decoded, senderPublicKey, err := protocol.PacketDecrypt(msg.EmbeddedPacketRaw, peer.Backend.PeerPublicKey)
+ 	if err != nil {
+ 		return
+ 	}
+ 	if !senderPublicKey.IsEqual(msg.SignerPublicKey) {
+ 		return
+-	} else if senderPublicKey.IsEqual(peer.Backend.peerPublicKey) {
++	} else if senderPublicKey.IsEqual(peer.Backend.PeerPublicKey) {
+ 		return
+ 	} else if decoded.Protocol != 0 {
+ 		return
+diff --git a/Commands.go b/Commands.go
+index 8b6c1a1..0e8846a 100644
+--- a/Commands.go
++++ b/Commands.go
+@@ -288,7 +288,7 @@ func (peer *PeerInfo) cmdGetBlock(msg *protocol.MessageGetBlock, connection *Con
+ 	switch msg.Control {
+ 	case protocol.GetBlockControlRequestStart:
+ 		// Currently only support the local blockchain.
+-		if !msg.BlockchainPublicKey.IsEqual(peer.Backend.peerPublicKey) {
++		if !msg.BlockchainPublicKey.IsEqual(peer.Backend.PeerPublicKey) {
+ 			peer.sendGetBlock(nil, protocol.GetBlockControlNotAvailable, msg.BlockchainPublicKey, 0, 0, nil, msg.Sequence, uuid.UUID{}, false)
+ 			return
+ 		} else if _, height, _ := peer.Backend.UserBlockchain.Header(); height == 0 {
+diff --git a/Connection.go b/Connection.go
+index f93323a..ca0c1e9 100644
+--- a/Connection.go
++++ b/Connection.go
+@@ -346,7 +346,7 @@ func (c *Connection) send(packet *protocol.PacketRaw, receiverPublicKey *btcec.P
+ 
+ 	c.backend.Filters.PacketOut(packet, receiverPublicKey, c)
+ 
+-	raw, err := protocol.PacketEncrypt(c.backend.peerPrivateKey, receiverPublicKey, packet)
++	raw, err := protocol.PacketEncrypt(c.backend.PeerPrivateKey, receiverPublicKey, packet)
+ 	if err != nil {
+ 		return err
+ 	}
+diff --git a/Message Send.go b/Message Send.go
+index 378be19..4e79b7a 100644
+--- a/Message Send.go	
++++ b/Message Send.go	
+@@ -90,12 +90,12 @@ func (peer *PeerInfo) sendTraverse(packet *protocol.PacketRaw, receiverEnd *btce
+ 	// self-reported ports are not set, as this isn't sent via a specific network but a relay
+ 	//packet.SetSelfReportedPorts(c.Network.SelfReportedPorts())
+ 
+-	embeddedPacketRaw, err := protocol.PacketEncrypt(peer.Backend.peerPrivateKey, receiverEnd, packet)
++	embeddedPacketRaw, err := protocol.PacketEncrypt(peer.Backend.PeerPrivateKey, receiverEnd, packet)
+ 	if err != nil {
+ 		return err
+ 	}
+ 
+-	packetRaw, err := protocol.EncodeTraverse(peer.Backend.peerPrivateKey, embeddedPacketRaw, receiverEnd, peer.PublicKey)
++	packetRaw, err := protocol.EncodeTraverse(peer.Backend.PeerPrivateKey, embeddedPacketRaw, receiverEnd, peer.PublicKey)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -118,7 +118,7 @@ func (peer *PeerInfo) sendTransfer(data []byte, control, transferProtocol uint8,
+ 		return peer.sendLite(raw)
+ 	}
+ 
+-	packetRaw, err := protocol.EncodeTransfer(peer.Backend.peerPrivateKey, data, control, transferProtocol, hash, offset, limit, transferID)
++	packetRaw, err := protocol.EncodeTransfer(peer.Backend.PeerPrivateKey, data, control, transferProtocol, hash, offset, limit, transferID)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -141,7 +141,7 @@ func (peer *PeerInfo) sendGetBlock(data []byte, control uint8, blockchainPublicK
+ 		return peer.sendLite(raw)
+ 	}
+ 
+-	packetRaw, err := protocol.EncodeGetBlock(peer.Backend.peerPrivateKey, data, control, blockchainPublicKey, limitBlockCount, maxBlockSize, targetBlocks, transferID)
++	packetRaw, err := protocol.EncodeGetBlock(peer.Backend.PeerPrivateKey, data, control, blockchainPublicKey, limitBlockCount, maxBlockSize, targetBlocks, transferID)
+ 	if err != nil {
+ 		return err
+ 	}
+diff --git a/Network IPv4 Broadcast.go b/Network IPv4 Broadcast.go
+index b95bf45..93cb546 100644
+--- a/Network IPv4 Broadcast.go	
++++ b/Network IPv4 Broadcast.go	
+@@ -98,7 +98,7 @@ func (network *Network) BroadcastIPv4Send() (err error) {
+ 		return errors.New("error encoding broadcast announcement")
+ 	}
+ 
+-	raw, err := protocol.PacketEncrypt(network.backend.peerPrivateKey, ipv4BroadcastPublicKey, &protocol.PacketRaw{Protocol: protocol.ProtocolVersion, Command: protocol.CommandLocalDiscovery, Payload: packets[0]})
++	raw, err := protocol.PacketEncrypt(network.backend.PeerPrivateKey, ipv4BroadcastPublicKey, &protocol.PacketRaw{Protocol: protocol.ProtocolVersion, Command: protocol.CommandLocalDiscovery, Payload: packets[0]})
+ 	if err != nil {
+ 		return err
+ 	}
+diff --git a/Network IPv6 Multicast.go b/Network IPv6 Multicast.go
+index b206639..19bff38 100644
+--- a/Network IPv6 Multicast.go	
++++ b/Network IPv6 Multicast.go	
+@@ -143,7 +143,7 @@ func (network *Network) MulticastIPv6Send() (err error) {
+ 		return errors.New("error encoding multicast announcement")
+ 	}
+ 
+-	raw, err := protocol.PacketEncrypt(network.backend.peerPrivateKey, ipv6MulticastPublicKey, &protocol.PacketRaw{Protocol: protocol.ProtocolVersion, Command: protocol.CommandLocalDiscovery, Payload: packets[0]})
++	raw, err := protocol.PacketEncrypt(network.backend.PeerPrivateKey, ipv6MulticastPublicKey, &protocol.PacketRaw{Protocol: protocol.ProtocolVersion, Command: protocol.CommandLocalDiscovery, Payload: packets[0]})
+ 	if err != nil {
+ 		return err
+ 	}
+diff --git a/Network.go b/Network.go
+index 727b131..d00f213 100644
+--- a/Network.go
++++ b/Network.go
+@@ -125,7 +125,7 @@ func (network *Network) Listen() {
+ 		if isLite, err := network.networkGroup.LiteRouter.IsPacketLite(buffer[:length]); isLite && err != nil {
+ 			continue
+ 		} else if isLite {
+-			network.networkGroup.litePacketsIncoming <- networkWire{network: network, sender: sender, raw: buffer[:length], receiverPublicKey: network.backend.peerPublicKey, unicast: true}
++			network.networkGroup.litePacketsIncoming <- networkWire{network: network, sender: sender, raw: buffer[:length], receiverPublicKey: network.backend.PeerPublicKey, unicast: true}
+ 			continue
+ 		}
+ 
+@@ -135,7 +135,7 @@ func (network *Network) Listen() {
+ 		}
+ 
+ 		// send the packet to a channel which is processed by multiple workers.
+-		network.networkGroup.rawPacketsIncoming <- networkWire{network: network, sender: sender, raw: buffer[:length], receiverPublicKey: network.backend.peerPublicKey, unicast: true}
++		network.networkGroup.rawPacketsIncoming <- networkWire{network: network, sender: sender, raw: buffer[:length], receiverPublicKey: network.backend.PeerPublicKey, unicast: true}
+ 	}
+ }
+ 
+@@ -149,7 +149,7 @@ func (nets *Networks) packetWorker() {
+ 		}
+ 
+ 		// immediately discard message if sender = self
+-		if senderPublicKey.IsEqual(nets.backend.peerPublicKey) {
++		if senderPublicKey.IsEqual(nets.backend.PeerPublicKey) {
+ 			continue
+ 		}
+ 
+@@ -283,9 +283,9 @@ func (nets *Networks) packetWorker() {
+ 		case protocol.CommandTraverse:
+ 			if traverse, _ := protocol.DecodeTraverse(raw); traverse != nil {
+ 				nets.backend.Filters.MessageIn(peer, raw, traverse)
+-				if traverse.TargetPeer.IsEqual(nets.backend.peerPublicKey) && traverse.AuthorizedRelayPeer.IsEqual(peer.PublicKey) {
++				if traverse.TargetPeer.IsEqual(nets.backend.PeerPublicKey) && traverse.AuthorizedRelayPeer.IsEqual(peer.PublicKey) {
+ 					peer.cmdTraverseReceive(traverse)
+-				} else if traverse.AuthorizedRelayPeer.IsEqual(nets.backend.peerPublicKey) {
++				} else if traverse.AuthorizedRelayPeer.IsEqual(nets.backend.PeerPublicKey) {
+ 					peer.cmdTraverseForward(traverse)
+ 				}
+ 			}
+diff --git a/Peer ID.go b/Peer ID.go
+index be76c27..2736a14 100644
+--- a/Peer ID.go	
++++ b/Peer ID.go	
+@@ -28,8 +28,8 @@ func (backend *Backend) initPeerID() {
+ 	if len(backend.Config.PrivateKey) > 0 {
+ 		configPK, err := hex.DecodeString(backend.Config.PrivateKey)
+ 		if err == nil {
+-			backend.peerPrivateKey, backend.peerPublicKey = btcec.PrivKeyFromBytes(btcec.S256(), configPK)
+-			backend.nodeID = protocol.PublicKey2NodeID(backend.peerPublicKey)
++			backend.PeerPrivateKey, backend.PeerPublicKey = btcec.PrivKeyFromBytes(btcec.S256(), configPK)
++			backend.nodeID = protocol.PublicKey2NodeID(backend.PeerPublicKey)
+ 
+ 			if backend.Config.AutoUpdateSeedList {
+ 				backend.configUpdateSeedList()
+@@ -43,15 +43,15 @@ func (backend *Backend) initPeerID() {
+ 
+ 	// if the peer ID is empty, create a new user public-private key pair
+ 	var err error
+-	backend.peerPrivateKey, backend.peerPublicKey, err = Secp256k1NewPrivateKey()
++	backend.PeerPrivateKey, backend.PeerPublicKey, err = Secp256k1NewPrivateKey()
+ 	if err != nil {
+ 		backend.LogError("initPeerID", "generating public-private key pairs: %s\n", err.Error())
+ 		os.Exit(ExitPrivateKeyCreate)
+ 	}
+-	backend.nodeID = protocol.PublicKey2NodeID(backend.peerPublicKey)
++	backend.nodeID = protocol.PublicKey2NodeID(backend.PeerPublicKey)
+ 
+ 	// save the newly generated private key into the config
+-	backend.Config.PrivateKey = hex.EncodeToString(backend.peerPrivateKey.Serialize())
++	backend.Config.PrivateKey = hex.EncodeToString(backend.PeerPrivateKey.Serialize())
+ 
+ 	backend.SaveConfig()
+ }
+@@ -68,7 +68,7 @@ func Secp256k1NewPrivateKey() (privateKey *btcec.PrivateKey, publicKey *btcec.Pu
+ 
+ // ExportPrivateKey returns the peers public and private key
+ func (backend *Backend) ExportPrivateKey() (privateKey *btcec.PrivateKey, publicKey *btcec.PublicKey) {
+-	return backend.peerPrivateKey, backend.peerPublicKey
++	return backend.PeerPrivateKey, backend.PeerPublicKey
+ }
+ 
+ // SelfNodeID returns the node ID used for DHT
+@@ -250,7 +250,7 @@ func (peerSource *PeerInfo) records2Nodes(records []protocol.PeerRecord) (nodes
+ // selfPeerRecord returns self as peer record
+ func (backend *Backend) selfPeerRecord() (result protocol.PeerRecord) {
+ 	return protocol.PeerRecord{
+-		PublicKey: backend.peerPublicKey,
++		PublicKey: backend.PeerPublicKey,
+ 		NodeID:    backend.nodeID,
+ 		//IP:          network.address.IP,
+ 		//Port:        uint16(network.address.Port),
+diff --git a/Peernet.go b/Peernet.go
+index 2cf05bb..b9ea5f9 100644
+--- a/Peernet.go
++++ b/Peernet.go
+@@ -101,8 +101,8 @@ type Backend struct {
+ 	nodesDHT              *dht.DHT                 // Nodes connected in the DHT.
+ 
+ 	// peerID is the current peer's ID. It is a ECDSA (secp256k1) 257-bit public key.
+-	peerPrivateKey *btcec.PrivateKey
+-	peerPublicKey  *btcec.PublicKey
++	PeerPrivateKey *btcec.PrivateKey
++	PeerPublicKey  *btcec.PublicKey
+ 
+ 	// The node ID is the blake3 hash of the public key compressed form.
+ 	nodeID []byte
+diff --git a/webapi/API.go b/webapi/API.go
+index dec0d8d..7212b67 100644
+--- a/webapi/API.go
++++ b/webapi/API.go
+@@ -22,7 +22,7 @@ import (
+ )
+ 
+ type WebapiInstance struct {
+-	backend         *core.Backend
++	Backend         *core.Backend
+ 	geoipCityReader *geoip2.CityReader
+ 
+ 	// Router can be used to register additional API functions
+@@ -57,7 +57,7 @@ func Start(Backend *core.Backend, ListenAddresses []string, UseSSL bool, Certifi
+ 	}
+ 
+ 	api = &WebapiInstance{
+-		backend:         Backend,
++		Backend:         Backend,
+ 		Router:          mux.NewRouter(),
+ 		AllowKeyInParam: []string{"/file/read", "/file/view"},
+ 		allJobs:         make(map[uuid.UUID]*SearchJob),
+diff --git a/webapi/Blockchain.go b/webapi/Blockchain.go
+index 0d6a362..7d7fea0 100644
+--- a/webapi/Blockchain.go
++++ b/webapi/Blockchain.go
+@@ -27,9 +27,9 @@ Request:    GET /blockchain/header
+ Result:     200 with JSON structure apiResponsePeerSelf
+ */
+ func (api *WebapiInstance) apiBlockchainHeaderFunc(w http.ResponseWriter, r *http.Request) {
+-	publicKey, height, version := api.backend.UserBlockchain.Header()
++	publicKey, height, version := api.Backend.UserBlockchain.Header()
+ 
+-	EncodeJSON(api.backend, w, r, apiBlockchainHeader{Version: version, Height: height, PeerID: hex.EncodeToString(publicKey.SerializeCompressed())})
++	EncodeJSON(api.Backend, w, r, apiBlockchainHeader{Version: version, Height: height, PeerID: hex.EncodeToString(publicKey.SerializeCompressed())})
+ }
+ 
+ type apiBlockRecordRaw struct {
+@@ -67,9 +67,9 @@ func (api *WebapiInstance) apiBlockchainAppend(w http.ResponseWriter, r *http.Re
+ 		records = append(records, blockchain.BlockRecordRaw{Type: record.Type, Data: record.Data})
+ 	}
+ 
+-	newHeight, newVersion, status := api.backend.UserBlockchain.Append(records)
++	newHeight, newVersion, status := api.Backend.UserBlockchain.Append(records)
+ 
+-	EncodeJSON(api.backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
++	EncodeJSON(api.Backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
+ }
+ 
+ type apiBlockchainBlock struct {
+@@ -96,7 +96,7 @@ func (api *WebapiInstance) apiBlockchainRead(w http.ResponseWriter, r *http.Requ
+ 		return
+ 	}
+ 
+-	block, status, _ := api.backend.UserBlockchain.Read(uint64(blockN))
++	block, status, _ := api.Backend.UserBlockchain.Read(uint64(blockN))
+ 	result := apiBlockchainBlock{Status: status}
+ 
+ 	if status == 0 {
+@@ -118,5 +118,5 @@ func (api *WebapiInstance) apiBlockchainRead(w http.ResponseWriter, r *http.Requ
+ 		}
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, result)
++	EncodeJSON(api.Backend, w, r, result)
+ }
+diff --git a/webapi/Download.go b/webapi/Download.go
+index 0b6e766..5bde24f 100644
+--- a/webapi/Download.go
++++ b/webapi/Download.go
+@@ -76,11 +76,11 @@ func (api *WebapiInstance) apiDownloadStart(w http.ResponseWriter, r *http.Reque
+ 		return
+ 	}
+ 
+-	info := &downloadInfo{backend: api.backend, api: api, id: uuid.New(), created: time.Now(), hash: hash, nodeID: nodeID}
++	info := &downloadInfo{backend: api.Backend, api: api, id: uuid.New(), created: time.Now(), hash: hash, nodeID: nodeID}
+ 
+ 	// create the file immediately
+ 	if info.initDiskFile(filePath) != nil {
+-		EncodeJSON(api.backend, w, r, apiResponseDownloadStatus{APIStatus: DownloadResponseFileInvalid})
++		EncodeJSON(api.Backend, w, r, apiResponseDownloadStatus{APIStatus: DownloadResponseFileInvalid})
+ 		return
+ 	}
+ 
+@@ -90,7 +90,7 @@ func (api *WebapiInstance) apiDownloadStart(w http.ResponseWriter, r *http.Reque
+ 	// start the download!
+ 	go info.Start()
+ 
+-	EncodeJSON(api.backend, w, r, apiResponseDownloadStatus{APIStatus: DownloadResponseSuccess, ID: info.id, DownloadStatus: DownloadWaitMetadata})
++	EncodeJSON(api.Backend, w, r, apiResponseDownloadStatus{APIStatus: DownloadResponseSuccess, ID: info.id, DownloadStatus: DownloadWaitMetadata})
+ }
+ 
+ /*
+@@ -109,7 +109,7 @@ func (api *WebapiInstance) apiDownloadStatus(w http.ResponseWriter, r *http.Requ
+ 
+ 	info := api.downloadLookup(id)
+ 	if info == nil {
+-		EncodeJSON(api.backend, w, r, apiResponseDownloadStatus{APIStatus: DownloadResponseIDNotFound})
++		EncodeJSON(api.Backend, w, r, apiResponseDownloadStatus{APIStatus: DownloadResponseIDNotFound})
+ 		return
+ 	}
+ 
+@@ -132,7 +132,7 @@ func (api *WebapiInstance) apiDownloadStatus(w http.ResponseWriter, r *http.Requ
+ 
+ 	info.RUnlock()
+ 
+-	EncodeJSON(api.backend, w, r, response)
++	EncodeJSON(api.Backend, w, r, response)
+ }
+ 
+ /*
+@@ -154,7 +154,7 @@ func (api *WebapiInstance) apiDownloadAction(w http.ResponseWriter, r *http.Requ
+ 
+ 	info := api.downloadLookup(id)
+ 	if info == nil {
+-		EncodeJSON(api.backend, w, r, apiResponseDownloadStatus{APIStatus: DownloadResponseIDNotFound})
++		EncodeJSON(api.Backend, w, r, apiResponseDownloadStatus{APIStatus: DownloadResponseIDNotFound})
+ 		return
+ 	}
+ 
+@@ -171,7 +171,7 @@ func (api *WebapiInstance) apiDownloadAction(w http.ResponseWriter, r *http.Requ
+ 		apiStatus = info.Cancel()
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, apiResponseDownloadStatus{APIStatus: apiStatus, ID: info.id, DownloadStatus: info.status})
++	EncodeJSON(api.Backend, w, r, apiResponseDownloadStatus{APIStatus: apiStatus, ID: info.id, DownloadStatus: info.status})
+ }
+ 
+ // ---- download tracking ----
+diff --git a/webapi/File Detection.go b/webapi/File Detection.go
+index 321dfed..6222f3e 100644
+--- a/webapi/File Detection.go	
++++ b/webapi/File Detection.go	
+@@ -213,9 +213,9 @@ func (api *WebapiInstance) apiFileFormat(w http.ResponseWriter, r *http.Request)
+ 
+ 	fileType, fileFormat, err := FileDetectType(filePath)
+ 	if err != nil {
+-		EncodeJSON(api.backend, w, r, apiResponseFileFormat{Status: 1})
++		EncodeJSON(api.Backend, w, r, apiResponseFileFormat{Status: 1})
+ 		return
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, apiResponseFileFormat{Status: 0, FileType: fileType, FileFormat: fileFormat})
++	EncodeJSON(api.Backend, w, r, apiResponseFileFormat{Status: 0, FileType: fileType, FileFormat: fileFormat})
+ }
+diff --git a/webapi/File IO.go b/webapi/File IO.go
+index 434d382..0045691 100644
+--- a/webapi/File IO.go	
++++ b/webapi/File IO.go	
+@@ -26,13 +26,16 @@ Instead of providing the node ID, the peer ID is also accepted in the &node= par
+ The default timeout for connecting to the peer is 10 seconds.
+ 
+ Request:    GET /file/read?hash=[hash]&node=[node ID]
+-            Optional: &offset=[offset]&limit=[limit] or via Range header.
+-            Optional: &timeout=[seconds]
++
++	Optional: &offset=[offset]&limit=[limit] or via Range header.
++	Optional: &timeout=[seconds]
++
+ Response:   200 with the content
+-            206 with partial content
+-            400 if the parameters are invalid
+-            404 if the file was not found or other error on transfer initiate
+-            502 if unable to find or connect to the remote peer in time
++
++	206 with partial content
++	400 if the parameters are invalid
++	404 if the file was not found or other error on transfer initiate
++	502 if unable to find or connect to the remote peer in time
+ */
+ func (api *WebapiInstance) apiFileRead(w http.ResponseWriter, r *http.Request) {
+ 	r.ParseForm()
+@@ -69,7 +72,7 @@ func (api *WebapiInstance) apiFileRead(w http.ResponseWriter, r *http.Request) {
+ 	}
+ 
+ 	// Is the file available in the local warehouse? In that case requesting it from the remote is unnecessary.
+-	if serveFileFromWarehouse(api.backend, w, fileHash, uint64(offset), uint64(limit), ranges) {
++	if serveFileFromWarehouse(api.Backend, w, fileHash, uint64(offset), uint64(limit), ranges) {
+ 		return
+ 	}
+ 
+@@ -77,9 +80,9 @@ func (api *WebapiInstance) apiFileRead(w http.ResponseWriter, r *http.Request) {
+ 	var peer *core.PeerInfo
+ 
+ 	if valid2 {
+-		peer, err = PeerConnectNode(api.backend, nodeID, timeout)
++		peer, err = PeerConnectNode(api.Backend, nodeID, timeout)
+ 	} else if err3 == nil {
+-		peer, err = PeerConnectPublicKey(api.backend, publicKey, timeout)
++		peer, err = PeerConnectPublicKey(api.Backend, publicKey, timeout)
+ 	}
+ 	if err != nil {
+ 		w.WriteHeader(http.StatusBadGateway)
+@@ -139,13 +142,16 @@ The default timeout for connecting to the peer is 10 seconds.
+ Formats: 14 = Video
+ 
+ Request:    GET /file/view?hash=[hash]&node=[node ID]&format=[format]
+-            Optional: &offset=[offset]&limit=[limit] or via Range header.
+-            Optional: &timeout=[seconds]
++
++	Optional: &offset=[offset]&limit=[limit] or via Range header.
++	Optional: &timeout=[seconds]
++
+ Response:   200 with the content
+-            206 with partial content
+-            400 if the parameters are invalid
+-            404 if the file was not found or other error on transfer initiate
+-            502 if unable to find or connect to the remote peer in time
++
++	206 with partial content
++	400 if the parameters are invalid
++	404 if the file was not found or other error on transfer initiate
++	502 if unable to find or connect to the remote peer in time
+ */
+ func (api *WebapiInstance) apiFileView(w http.ResponseWriter, r *http.Request) {
+ 	r.ParseForm()
+@@ -193,7 +199,7 @@ func (api *WebapiInstance) apiFileView(w http.ResponseWriter, r *http.Request) {
+ 
+ 	// Is the file available in the local warehouse? In that case requesting it from the remote is unnecessary.
+ 	if !localCacheDisable {
+-		if serveFileFromWarehouse(api.backend, w, fileHash, uint64(offset), uint64(limit), ranges) {
++		if serveFileFromWarehouse(api.Backend, w, fileHash, uint64(offset), uint64(limit), ranges) {
+ 			return
+ 		}
+ 	}
+@@ -202,9 +208,9 @@ func (api *WebapiInstance) apiFileView(w http.ResponseWriter, r *http.Request) {
+ 	var peer *core.PeerInfo
+ 
+ 	if valid2 {
+-		peer, err = PeerConnectNode(api.backend, nodeID, timeout)
++		peer, err = PeerConnectNode(api.Backend, nodeID, timeout)
+ 	} else if err3 == nil {
+-		peer, err = PeerConnectPublicKey(api.backend, publicKey, timeout)
++		peer, err = PeerConnectPublicKey(api.Backend, publicKey, timeout)
+ 	}
+ 	if err != nil {
+ 		w.WriteHeader(http.StatusBadGateway)
+diff --git a/webapi/File.go b/webapi/File.go
+index a7da52f..60765cf 100644
+--- a/webapi/File.go
++++ b/webapi/File.go
+@@ -130,7 +130,8 @@ In case the function aborts, the blockchain remains unchanged.
+ 
+ Request:    POST /blockchain/file/add with JSON structure apiBlockAddFiles
+ Response:   200 with JSON structure apiBlockchainBlockStatus
+-			400 if invalid input
++
++	400 if invalid input
+ */
+ func (api *WebapiInstance) apiBlockchainFileAdd(w http.ResponseWriter, r *http.Request) {
+ 	var input apiBlockAddFiles
+@@ -154,8 +155,8 @@ func (api *WebapiInstance) apiBlockchainFileAdd(w http.ResponseWriter, r *http.R
+ 			if _, err := warehouse.ValidateHash(file.Hash); err != nil {
+ 				http.Error(w, "", http.StatusBadRequest)
+ 				return
+-			} else if _, fileSize, status, _ := api.backend.UserWarehouse.FileExists(file.Hash); status != warehouse.StatusOK {
+-				EncodeJSON(api.backend, w, r, apiBlockchainBlockStatus{Status: blockchain.StatusNotInWarehouse})
++			} else if _, fileSize, status, _ := api.Backend.UserWarehouse.FileExists(file.Hash); status != warehouse.StatusOK {
++				EncodeJSON(api.Backend, w, r, apiBlockchainBlockStatus{Status: blockchain.StatusNotInWarehouse})
+ 				return
+ 			} else {
+ 				file.Size = fileSize
+@@ -168,17 +169,17 @@ func (api *WebapiInstance) apiBlockchainFileAdd(w http.ResponseWriter, r *http.R
+ 		blockRecord := blockRecordFileFromAPI(file)
+ 
+ 		// Set the merkle tree info as appropriate.
+-		if !setFileMerkleInfo(api.backend, &blockRecord) {
+-			EncodeJSON(api.backend, w, r, apiBlockchainBlockStatus{Status: blockchain.StatusNotInWarehouse})
++		if !setFileMerkleInfo(api.Backend, &blockRecord) {
++			EncodeJSON(api.Backend, w, r, apiBlockchainBlockStatus{Status: blockchain.StatusNotInWarehouse})
+ 			return
+ 		}
+ 
+ 		filesAdd = append(filesAdd, blockRecord)
+ 	}
+ 
+-	newHeight, newVersion, status := api.backend.UserBlockchain.AddFiles(filesAdd)
++	newHeight, newVersion, status := api.Backend.UserBlockchain.AddFiles(filesAdd)
+ 
+-	EncodeJSON(api.backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
++	EncodeJSON(api.Backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
+ }
+ 
+ /*
+@@ -188,7 +189,7 @@ Request:    GET /blockchain/file/list
+ Response:   200 with JSON structure apiBlockAddFiles
+ */
+ func (api *WebapiInstance) apiBlockchainFileList(w http.ResponseWriter, r *http.Request) {
+-	files, status := api.backend.UserBlockchain.ListFiles()
++	files, status := api.Backend.UserBlockchain.ListFiles()
+ 
+ 	var result apiBlockAddFiles
+ 
+@@ -198,7 +199,7 @@ func (api *WebapiInstance) apiBlockchainFileList(w http.ResponseWriter, r *http.
+ 
+ 	result.Status = status
+ 
+-	EncodeJSON(api.backend, w, r, result)
++	EncodeJSON(api.Backend, w, r, result)
+ }
+ 
+ /*
+@@ -220,18 +221,18 @@ func (api *WebapiInstance) apiBlockchainFileDelete(w http.ResponseWriter, r *htt
+ 		deleteIDs = append(deleteIDs, input.Files[n].ID)
+ 	}
+ 
+-	newHeight, newVersion, deletedFiles, status := api.backend.UserBlockchain.DeleteFiles(deleteIDs)
++	newHeight, newVersion, deletedFiles, status := api.Backend.UserBlockchain.DeleteFiles(deleteIDs)
+ 
+ 	// If successfully deleted from the blockchain, delete from the Warehouse in case there are no other references.
+ 	if status == blockchain.StatusOK {
+ 		for n := range deletedFiles {
+-			if files, status := api.backend.UserBlockchain.FileExists(deletedFiles[n].Hash); status == blockchain.StatusOK && len(files) == 0 {
+-				api.backend.UserWarehouse.DeleteFile(deletedFiles[n].Hash)
++			if files, status := api.Backend.UserBlockchain.FileExists(deletedFiles[n].Hash); status == blockchain.StatusOK && len(files) == 0 {
++				api.Backend.UserWarehouse.DeleteFile(deletedFiles[n].Hash)
+ 			}
+ 		}
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
++	EncodeJSON(api.Backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
+ }
+ 
+ /*
+@@ -239,7 +240,8 @@ apiBlockchainSelfUpdateFile updates files that are already published on the bloc
+ 
+ Request:    POST /blockchain/file/update with JSON structure apiBlockAddFiles
+ Response:   200 with JSON structure apiBlockchainBlockStatus
+-			400 if invalid input
++
++	400 if invalid input
+ */
+ func (api *WebapiInstance) apiBlockchainFileUpdate(w http.ResponseWriter, r *http.Request) {
+ 	var input apiBlockAddFiles
+@@ -263,8 +265,8 @@ func (api *WebapiInstance) apiBlockchainFileUpdate(w http.ResponseWriter, r *htt
+ 			if _, err := warehouse.ValidateHash(file.Hash); err != nil {
+ 				http.Error(w, "", http.StatusBadRequest)
+ 				return
+-			} else if _, fileSize, status, _ := api.backend.UserWarehouse.FileExists(file.Hash); status != warehouse.StatusOK {
+-				EncodeJSON(api.backend, w, r, apiBlockchainBlockStatus{Status: blockchain.StatusNotInWarehouse})
++			} else if _, fileSize, status, _ := api.Backend.UserWarehouse.FileExists(file.Hash); status != warehouse.StatusOK {
++				EncodeJSON(api.Backend, w, r, apiBlockchainBlockStatus{Status: blockchain.StatusNotInWarehouse})
+ 				return
+ 			} else {
+ 				file.Size = fileSize
+@@ -277,17 +279,17 @@ func (api *WebapiInstance) apiBlockchainFileUpdate(w http.ResponseWriter, r *htt
+ 		blockRecord := blockRecordFileFromAPI(file)
+ 
+ 		// Set the merkle tree info as appropriate.
+-		if !setFileMerkleInfo(api.backend, &blockRecord) {
+-			EncodeJSON(api.backend, w, r, apiBlockchainBlockStatus{Status: blockchain.StatusNotInWarehouse})
++		if !setFileMerkleInfo(api.Backend, &blockRecord) {
++			EncodeJSON(api.Backend, w, r, apiBlockchainBlockStatus{Status: blockchain.StatusNotInWarehouse})
+ 			return
+ 		}
+ 
+ 		filesAdd = append(filesAdd, blockRecord)
+ 	}
+ 
+-	newHeight, newVersion, status := api.backend.UserBlockchain.ReplaceFiles(filesAdd)
++	newHeight, newVersion, status := api.Backend.UserBlockchain.ReplaceFiles(filesAdd)
+ 
+-	EncodeJSON(api.backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
++	EncodeJSON(api.Backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
+ }
+ 
+ // ---- metadata functions ----
+diff --git a/webapi/Profile.go b/webapi/Profile.go
+index 024ded0..be5ac1a 100644
+--- a/webapi/Profile.go
++++ b/webapi/Profile.go
+@@ -35,14 +35,14 @@ Request:    GET /profile/list
+ Response:   200 with JSON structure apiProfileData
+ */
+ func (api *WebapiInstance) apiProfileList(w http.ResponseWriter, r *http.Request) {
+-	fields, status := api.backend.UserBlockchain.ProfileList()
++	fields, status := api.Backend.UserBlockchain.ProfileList()
+ 
+ 	result := apiProfileData{Status: status}
+ 	for n := range fields {
+ 		result.Fields = append(result.Fields, blockRecordProfileToAPI(fields[n]))
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, result)
++	EncodeJSON(api.Backend, w, r, result)
+ }
+ 
+ /*
+@@ -63,11 +63,11 @@ func (api *WebapiInstance) apiProfileRead(w http.ResponseWriter, r *http.Request
+ 	var result apiProfileData
+ 
+ 	var data []byte
+-	if data, result.Status = api.backend.UserBlockchain.ProfileReadField(uint16(fieldN)); result.Status == blockchain.StatusOK {
++	if data, result.Status = api.Backend.UserBlockchain.ProfileReadField(uint16(fieldN)); result.Status == blockchain.StatusOK {
+ 		result.Fields = append(result.Fields, blockRecordProfileToAPI(blockchain.BlockRecordProfile{Type: uint16(fieldN), Data: data}))
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, result)
++	EncodeJSON(api.Backend, w, r, result)
+ }
+ 
+ /*
+@@ -88,9 +88,9 @@ func (api *WebapiInstance) apiProfileWrite(w http.ResponseWriter, r *http.Reques
+ 		fields = append(fields, blockRecordProfileFromAPI(input.Fields[n]))
+ 	}
+ 
+-	newHeight, newVersion, status := api.backend.UserBlockchain.ProfileWrite(fields)
++	newHeight, newVersion, status := api.Backend.UserBlockchain.ProfileWrite(fields)
+ 
+-	EncodeJSON(api.backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
++	EncodeJSON(api.Backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
+ }
+ 
+ /*
+@@ -111,9 +111,9 @@ func (api *WebapiInstance) apiProfileDelete(w http.ResponseWriter, r *http.Reque
+ 		fields = append(fields, input.Fields[n].Type)
+ 	}
+ 
+-	newHeight, newVersion, status := api.backend.UserBlockchain.ProfileDelete(fields)
++	newHeight, newVersion, status := api.Backend.UserBlockchain.ProfileDelete(fields)
+ 
+-	EncodeJSON(api.backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
++	EncodeJSON(api.Backend, w, r, apiBlockchainBlockStatus{Status: status, Height: newHeight, Version: newVersion})
+ }
+ 
+ // --- conversion from core to API data ---
+diff --git a/webapi/Search Dispatch.go b/webapi/Search Dispatch.go
+index 3107bfa..4c22ecf 100644
+--- a/webapi/Search Dispatch.go	
++++ b/webapi/Search Dispatch.go	
+@@ -32,18 +32,18 @@ func (api *WebapiInstance) dispatchSearch(input SearchRequest) (job *SearchJob)
+ }
+ 
+ func (job *SearchJob) localSearch(api *WebapiInstance, term string) {
+-	if api.backend.SearchIndex == nil {
++	if api.Backend.SearchIndex == nil {
+ 		job.Status = SearchStatusNoIndex
+ 		return
+ 	}
+ 
+-	results := api.backend.SearchIndex.Search(term)
++	results := api.Backend.SearchIndex.Search(term)
+ 
+ 	job.ResultSync.Lock()
+ 
+ resultLoop:
+ 	for _, result := range results {
+-		file, _, found, err := api.backend.ReadFile(result.PublicKey, result.BlockchainVersion, result.BlockNumber, result.FileID)
++		file, _, found, err := api.Backend.ReadFile(result.PublicKey, result.BlockchainVersion, result.BlockNumber, result.FileID)
+ 		if err != nil || !found {
+ 			continue
+ 		}
+@@ -55,10 +55,10 @@ resultLoop:
+ 			}
+ 		}
+ 
+-		if bytes.Equal(file.NodeID, api.backend.SelfNodeID()) {
++		if bytes.Equal(file.NodeID, api.Backend.SelfNodeID()) {
+ 			// Indicates data from the current user.
+ 			file.Tags = append(file.Tags, blockchain.TagFromNumber(blockchain.TagSharedByCount, 1))
+-		} else if peer := api.backend.NodelistLookup(file.NodeID); peer != nil {
++		} else if peer := api.Backend.NodelistLookup(file.NodeID); peer != nil {
+ 			// add the tags 'Shared By Count' and 'Shared By GeoIP'
+ 			file.Tags = append(file.Tags, blockchain.TagFromNumber(blockchain.TagSharedByCount, 1))
+ 			if latitude, longitude, valid := api.Peer2GeoIP(peer); valid {
+diff --git a/webapi/Search.go b/webapi/Search.go
+index 1b7c7b5..be4ae29 100644
+--- a/webapi/Search.go
++++ b/webapi/Search.go
+@@ -80,7 +80,8 @@ apiSearch submits a search request
+ 
+ Request:    POST /search with JSON SearchRequest
+ Result:     200 on success with JSON SearchRequestResponse
+-            400 on invalid JSON
++
++	400 on invalid JSON
+ */
+ func (api *WebapiInstance) apiSearch(w http.ResponseWriter, r *http.Request) {
+ 
+@@ -106,7 +107,7 @@ func (api *WebapiInstance) apiSearch(w http.ResponseWriter, r *http.Request) {
+ 
+ 	job := api.dispatchSearch(input)
+ 
+-	EncodeJSON(api.backend, w, r, SearchRequestResponse{Status: 0, ID: job.id})
++	EncodeJSON(api.Backend, w, r, SearchRequestResponse{Status: 0, ID: job.id})
+ }
+ 
+ /*
+@@ -115,14 +116,16 @@ If reset is set, all results will be filtered and sorted according to the settin
+ 
+ Request:    GET /search/result?id=[UUID]&limit=[max records]
+ Optional parameters:
+-			&reset=[0|1] to reset the filters or sort orders with any of the below parameters (all required):
+-			&filetype=[File Type]
+-			&fileformat=[File Format]
+-			&from=[Date From]&to=[Date To]
+-			&sizemin=[Minimum file size]
+-			&sizemax=[Maximum file size]
+-			&sort=[sort order]
+-			&offset=[absolute offset] with &limit=[records] to get items pagination style. Returned items (and ones before) are automatically frozen.
++
++	&reset=[0|1] to reset the filters or sort orders with any of the below parameters (all required):
++	&filetype=[File Type]
++	&fileformat=[File Format]
++	&from=[Date From]&to=[Date To]
++	&sizemin=[Minimum file size]
++	&sizemax=[Maximum file size]
++	&sort=[sort order]
++	&offset=[absolute offset] with &limit=[records] to get items pagination style. Returned items (and ones before) are automatically frozen.
++
+ Result:     200 with JSON structure SearchResult. Check the field status.
+ */
+ func (api *WebapiInstance) apiSearchResult(w http.ResponseWriter, r *http.Request) {
+@@ -141,7 +144,7 @@ func (api *WebapiInstance) apiSearchResult(w http.ResponseWriter, r *http.Reques
+ 	// find the job ID
+ 	job := api.JobLookup(jobID)
+ 	if job == nil {
+-		EncodeJSON(api.backend, w, r, SearchResult{Status: 2})
++		EncodeJSON(api.Backend, w, r, SearchResult{Status: 2})
+ 		return
+ 	}
+ 
+@@ -201,7 +204,7 @@ func (api *WebapiInstance) apiSearchResult(w http.ResponseWriter, r *http.Reques
+ 		result.Statistic = job.Statistics()
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, result)
++	EncodeJSON(api.Backend, w, r, result)
+ }
+ 
+ /*
+@@ -209,7 +212,8 @@ apiSearchResultStream provides a websocket to receive results as stream.
+ 
+ Request:    GET /search/result/ws?id=[UUID]&limit=[optional max records]
+ Result:     If successful, upgrades to a websocket and sends JSON structure SearchResult messages.
+-            Limit is optional. Not used if ommitted or 0.
++
++	Limit is optional. Not used if ommitted or 0.
+ */
+ func (api *WebapiInstance) apiSearchResultStream(w http.ResponseWriter, r *http.Request) {
+ 	r.ParseForm()
+@@ -224,7 +228,7 @@ func (api *WebapiInstance) apiSearchResultStream(w http.ResponseWriter, r *http.
+ 	// look up the job
+ 	job := api.JobLookup(jobID)
+ 	if job == nil {
+-		EncodeJSON(api.backend, w, r, SearchResult{Status: 2})
++		EncodeJSON(api.Backend, w, r, SearchResult{Status: 2})
+ 		return
+ 	}
+ 
+@@ -293,8 +297,9 @@ apiSearchTerminate terminates a search
+ 
+ Request:    GET /search/terminate?id=[UUID]
+ Response:   204 Empty
+-            400 Invalid input
+-            404 ID not found
++
++	400 Invalid input
++	404 ID not found
+ */
+ func (api *WebapiInstance) apiSearchTerminate(w http.ResponseWriter, r *http.Request) {
+ 
+@@ -336,13 +341,13 @@ func (api *WebapiInstance) apiSearchStatistic(w http.ResponseWriter, r *http.Req
+ 	// find the job ID
+ 	job := api.JobLookup(jobID)
+ 	if job == nil {
+-		EncodeJSON(api.backend, w, r, SearchStatistic{Status: 2})
++		EncodeJSON(api.Backend, w, r, SearchStatistic{Status: 2})
+ 		return
+ 	}
+ 
+ 	stats := job.Statistics()
+ 
+-	EncodeJSON(api.backend, w, r, SearchStatistic{SearchStatisticData: stats, Status: 0, IsTerminated: job.IsTerminated()})
++	EncodeJSON(api.Backend, w, r, SearchStatistic{SearchStatisticData: stats, Status: 0, IsTerminated: job.IsTerminated()})
+ }
+ 
+ /*
+@@ -364,7 +369,7 @@ func (api *WebapiInstance) apiExplore(w http.ResponseWriter, r *http.Request) {
+ 		fileType = -1
+ 	}
+ 
+-	resultFiles := api.queryRecentShared(api.backend, fileType, uint64(limit*20/100), uint64(offset), uint64(limit))
++	resultFiles := api.queryRecentShared(api.Backend, fileType, uint64(limit*20/100), uint64(offset), uint64(limit))
+ 
+ 	var result SearchResult
+ 	result.Files = []apiFile{}
+@@ -380,7 +385,7 @@ func (api *WebapiInstance) apiExplore(w http.ResponseWriter, r *http.Request) {
+ 
+ 	result.Status = 1 // No more results to expect
+ 
+-	EncodeJSON(api.backend, w, r, result)
++	EncodeJSON(api.Backend, w, r, result)
+ }
+ 
+ func (input *SearchRequest) Parse() (Timeout time.Duration) {
+diff --git a/webapi/Shared Recent.go b/webapi/Shared Recent.go
+index 73cb9f7..af91572 100644
+--- a/webapi/Shared Recent.go	
++++ b/webapi/Shared Recent.go	
+@@ -19,7 +19,7 @@ func (api *WebapiInstance) queryRecentShared(backend *core.Backend, fileType int
+ 	}
+ 
+ 	// Use the peer list to know about active peers. Random order!
+-	peerList := api.backend.PeerlistGet()
++	peerList := api.Backend.PeerlistGet()
+ 
+ 	// Files from peers exceeding the limit. It is used if from all peers the total limit is not reached.
+ 	var filesSeconday []blockchain.BlockRecordFile
+diff --git a/webapi/Status.go b/webapi/Status.go
+index a316e4d..5c0d0c8 100644
+--- a/webapi/Status.go
++++ b/webapi/Status.go
+@@ -33,7 +33,7 @@ Request:    GET /status
+ Result:     200 with JSON structure Status
+ */
+ func (api *WebapiInstance) apiStatus(w http.ResponseWriter, r *http.Request) {
+-	status := apiResponseStatus{Status: 0, CountPeerList: api.backend.PeerlistCount()}
++	status := apiResponseStatus{Status: 0, CountPeerList: api.Backend.PeerlistCount()}
+ 	status.CountNetwork = status.CountPeerList // For now always same as CountPeerList, until native Statistics message to root peers is available.
+ 
+ 	// Connected: If at leat 2 peers.
+@@ -41,7 +41,7 @@ func (api *WebapiInstance) apiStatus(w http.ResponseWriter, r *http.Request) {
+ 	// Instead, the core should keep a count of "active peers".
+ 	status.IsConnected = status.CountPeerList >= 2
+ 
+-	EncodeJSON(api.backend, w, r, status)
++	EncodeJSON(api.Backend, w, r, status)
+ }
+ 
+ type apiResponsePeerSelf struct {
+@@ -56,12 +56,12 @@ Result:     200 with JSON structure apiResponsePeerSelf
+ */
+ func (api *WebapiInstance) apiAccountInfo(w http.ResponseWriter, r *http.Request) {
+ 	response := apiResponsePeerSelf{}
+-	response.NodeID = hex.EncodeToString(api.backend.SelfNodeID())
++	response.NodeID = hex.EncodeToString(api.Backend.SelfNodeID())
+ 
+-	_, publicKey := api.backend.ExportPrivateKey()
++	_, publicKey := api.Backend.ExportPrivateKey()
+ 	response.PeerID = hex.EncodeToString(publicKey.SerializeCompressed())
+ 
+-	EncodeJSON(api.backend, w, r, response)
++	EncodeJSON(api.Backend, w, r, response)
+ }
+ 
+ /*
+@@ -78,7 +78,7 @@ func (api *WebapiInstance) apiAccountDelete(w http.ResponseWriter, r *http.Reque
+ 		return
+ 	}
+ 
+-	api.backend.DeleteAccount()
++	api.Backend.DeleteAccount()
+ 
+ 	w.WriteHeader(http.StatusOK)
+ }
+@@ -95,7 +95,7 @@ func (api *WebapiInstance) apiStatusPeers(w http.ResponseWriter, r *http.Request
+ 	var peers []apiResponsePeerInfo
+ 
+ 	// query all nodes
+-	for _, peer := range api.backend.PeerlistGet() {
++	for _, peer := range api.Backend.PeerlistGet() {
+ 		peerInfo := apiResponsePeerInfo{
+ 			PeerID:            peer.PublicKey.SerializeCompressed(),
+ 			NodeID:            peer.NodeID,
+@@ -112,7 +112,7 @@ func (api *WebapiInstance) apiStatusPeers(w http.ResponseWriter, r *http.Request
+ 		peers = append(peers, peerInfo)
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, peers)
++	EncodeJSON(api.Backend, w, r, peers)
+ }
+ 
+ type apiResponsePeerInfo struct {
+diff --git a/webapi/Warehouse.go b/webapi/Warehouse.go
+index 0717611..bb92a9e 100644
+--- a/webapi/Warehouse.go
++++ b/webapi/Warehouse.go
+@@ -26,13 +26,13 @@ Request:    POST /warehouse/create with raw data to create as new file
+ Response:   200 with JSON structure WarehouseResult
+ */
+ func (api *WebapiInstance) apiWarehouseCreateFile(w http.ResponseWriter, r *http.Request) {
+-	hash, status, err := api.backend.UserWarehouse.CreateFile(r.Body, 0)
++	hash, status, err := api.Backend.UserWarehouse.CreateFile(r.Body, 0)
+ 
+ 	if err != nil {
+-		api.backend.LogError("warehouse.CreateFile", "status %d error: %v", status, err)
++		api.Backend.LogError("warehouse.CreateFile", "status %d error: %v", status, err)
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, WarehouseResult{Status: status, Hash: hash})
++	EncodeJSON(api.Backend, w, r, WarehouseResult{Status: status, Hash: hash})
+ }
+ 
+ /*
+@@ -51,23 +51,26 @@ func (api *WebapiInstance) apiWarehouseCreateFilePath(w http.ResponseWriter, r *
+ 		return
+ 	}
+ 
+-	hash, status, err := api.backend.UserWarehouse.CreateFileFromPath(filePath)
++	hash, status, err := api.Backend.UserWarehouse.CreateFileFromPath(filePath)
+ 
+ 	if err != nil {
+-		api.backend.LogError("warehouse.CreateFile", "status %d error: %v", status, err)
++		api.Backend.LogError("warehouse.CreateFile", "status %d error: %v", status, err)
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, WarehouseResult{Status: status, Hash: hash})
++	EncodeJSON(api.Backend, w, r, WarehouseResult{Status: status, Hash: hash})
+ }
+ 
+ /*
+ apiWarehouseReadFile reads a file in the warehouse.
+ 
+ Request:    GET /warehouse/read?hash=[hash]
+-            Optional parameters &offset=[file offset]&limit=[read limit in bytes]
++
++	Optional parameters &offset=[file offset]&limit=[read limit in bytes]
++
+ Response:   200 with the raw file data
+-			404 if file was not found
+-			500 in case of internal error opening the file
++
++	404 if file was not found
++	500 in case of internal error opening the file
+ */
+ func (api *WebapiInstance) apiWarehouseReadFile(w http.ResponseWriter, r *http.Request) {
+ 	r.ParseForm()
+@@ -80,7 +83,7 @@ func (api *WebapiInstance) apiWarehouseReadFile(w http.ResponseWriter, r *http.R
+ 	offset, _ := strconv.Atoi(r.Form.Get("offset"))
+ 	limit, _ := strconv.Atoi(r.Form.Get("limit"))
+ 
+-	status, bytesRead, err := api.backend.UserWarehouse.ReadFile(hash, int64(offset), int64(limit), w)
++	status, bytesRead, err := api.Backend.UserWarehouse.ReadFile(hash, int64(offset), int64(limit), w)
+ 
+ 	switch status {
+ 	case warehouse.StatusFileNotFound:
+@@ -94,7 +97,7 @@ func (api *WebapiInstance) apiWarehouseReadFile(w http.ResponseWriter, r *http.R
+ 	}
+ 
+ 	if err != nil {
+-		api.backend.LogError("warehouse.ReadFile", "status %d read %d error: %v", status, bytesRead, err)
++		api.Backend.LogError("warehouse.ReadFile", "status %d read %d error: %v", status, bytesRead, err)
+ 	}
+ }
+ 
+@@ -112,13 +115,13 @@ func (api *WebapiInstance) apiWarehouseDeleteFile(w http.ResponseWriter, r *http
+ 		return
+ 	}
+ 
+-	status, err := api.backend.UserWarehouse.DeleteFile(hash)
++	status, err := api.Backend.UserWarehouse.DeleteFile(hash)
+ 
+ 	if err != nil {
+-		api.backend.LogError("warehouse.DeleteFile", "status %d error: %v", status, err)
++		api.Backend.LogError("warehouse.DeleteFile", "status %d error: %v", status, err)
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, WarehouseResult{Status: status, Hash: hash})
++	EncodeJSON(api.Backend, w, r, WarehouseResult{Status: status, Hash: hash})
+ }
+ 
+ /*
+@@ -126,7 +129,9 @@ apiWarehouseReadFilePath reads a file from the warehouse and stores it to the ta
+ The path must include the full directory and file name.
+ 
+ Request:    GET /warehouse/read/path?hash=[hash]&path=[target path on disk]
+-            Optional parameters &offset=[file offset]&limit=[read limit in bytes]
++
++	Optional parameters &offset=[file offset]&limit=[read limit in bytes]
++
+ Response:   200 with JSON structure WarehouseResult
+ */
+ func (api *WebapiInstance) apiWarehouseReadFilePath(w http.ResponseWriter, r *http.Request) {
+@@ -141,11 +146,11 @@ func (api *WebapiInstance) apiWarehouseReadFilePath(w http.ResponseWriter, r *ht
+ 	offset, _ := strconv.Atoi(r.Form.Get("offset"))
+ 	limit, _ := strconv.Atoi(r.Form.Get("limit"))
+ 
+-	status, bytesRead, err := api.backend.UserWarehouse.ReadFileToDisk(hash, int64(offset), int64(limit), targetFile)
++	status, bytesRead, err := api.Backend.UserWarehouse.ReadFileToDisk(hash, int64(offset), int64(limit), targetFile)
+ 
+ 	if err != nil {
+-		api.backend.LogError("warehouse.ReadFileToDisk", "status %d read %d error: %v", status, bytesRead, err)
++		api.Backend.LogError("warehouse.ReadFileToDisk", "status %d read %d error: %v", status, bytesRead, err)
+ 	}
+ 
+-	EncodeJSON(api.backend, w, r, WarehouseResult{Status: status, Hash: hash})
++	EncodeJSON(api.Backend, w, r, WarehouseResult{Status: status, Hash: hash})
+ }
+-- 
+2.37.0 (Apple Git-136)
+
