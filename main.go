@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/PeernetOfficial/core"
 	"github.com/PeernetOfficial/core/webapi"
@@ -30,6 +31,14 @@ var (
 type Config struct {
 	NumberOfSlaveNode int
 	NumberOfRootNode  int
+	MainServerAddress string
+}
+
+// PeernetNode Node Stores all nodes generated
+type PeernetNode struct {
+	NodeConfig *webapi.WebapiInstance
+	FolderInfo string
+	RootNode   bool
 }
 
 // SetDefaults This function to be called only during a
@@ -41,6 +50,7 @@ func SetDefaults() error {
 	//Setting default paths for the config file
 	defaults["NumberOfSlaveNode"] = 1
 	defaults["NumberOfRootNode"] = 2
+	defaults["MainServerAddress"] = "127.0.0.1:8000"
 	//defaults["NetworkInterface"] = "wlp0s20f3"
 	//defaults["NetworkInterfaceIPV6Index"] = "2"
 
@@ -75,7 +85,7 @@ func ConfigInit() (*Config, error) {
 	//Read config file
 	if err := viper.ReadInConfig(); err != nil {
 		// If the error thrown is config file not found
-		//Sets default configuration to viper
+		// Sets default configuration to viper
 		SetDefaults()
 	}
 
@@ -88,20 +98,8 @@ func ConfigInit() (*Config, error) {
 	return &config, nil
 }
 
-// Stores all root nodes generated
-type RootNodes struct {
-	RootNode []RootNode
-}
-
-// RootNode Store information regarding root nodes
-type RootNode struct {
-	PublicKey     string
-	UDPAddress    string
-	WebAPIAddress string
-}
-
 // RunManager Starts Peernet test network for testing
-func (c *Config) RunManager() {
+func (c *Config) RunManager() (*[]PeernetNode, error) {
 	// Create runs folder if it does not exist
 	os.Mkdir("runs", os.ModePerm)
 
@@ -110,37 +108,53 @@ func (c *Config) RunManager() {
 
 	// Create runs folder if it does not exist
 	if err := os.Mkdir(folder, os.ModePerm); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
+
+	var peernetNodes []PeernetNode
+	var peernetRootNodes []PeernetNode
+	var emptyRootNode []PeernetNode
 
 	// Create Root Node
 	for i := 0; i < c.NumberOfRootNode; i++ {
 		// Start root node
-		StartPeernet(true, folder, i)
-		// Create delay 1 second
-		// Calling Sleep method
-		//time.Sleep(1 * time.Second)
+		peernetNode, err := StartPeernet(&emptyRootNode, folder, i)
+		if err != nil {
+			return nil, err
+		}
+		// TODO remove duplicate
+		peernetNodes = append(peernetNodes, *peernetNode)
+		peernetRootNodes = append(peernetRootNodes, *peernetNode)
 	}
 
 	for i := 0; i < c.NumberOfSlaveNode; i++ {
-		// Start root node
-		StartPeernet(false, folder, i)
-		// Create delay 1 second
-		// Calling Sleep method
-		//time.Sleep(1 * time.Second)
+		// Start regular node
+		peernetNode, err := StartPeernet(&peernetRootNodes, folder, i)
+		if err != nil {
+			return nil, err
+		}
+		peernetNodes = append(peernetNodes, *peernetNode)
 	}
+
+	return &peernetNodes, nil
 
 }
 
 // StartPeernet Spawn Peernet instance
-func StartPeernet(rootNode bool, RunPath string, number int) {
+func StartPeernet(rootNodes *[]PeernetNode, RunPath string, number int) (*PeernetNode, error) {
+	var peernetNode PeernetNode
 
 	var folder string
-	if rootNode {
+	if len(*rootNodes) != 0 {
 		folder = RunPath + "/runroot" + strconv.Itoa(number)
+		peernetNode.RootNode = true
 	} else {
 		folder = RunPath + "/run" + strconv.Itoa(number)
+		peernetNode.RootNode = false
 	}
+
+	// Set folder information
+	peernetNode.FolderInfo = folder
 
 	// Create runs folder if it does not exist
 	if err := os.Mkdir(folder, os.ModePerm); err != nil {
@@ -153,7 +167,7 @@ func StartPeernet(rootNode bool, RunPath string, number int) {
 
 	_, err := core.LoadConfig("/Config.yaml", &config)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	// set paths for warehouse
@@ -161,7 +175,7 @@ func StartPeernet(rootNode bool, RunPath string, number int) {
 
 	UDPport, err := freeport.GetFreePort()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	UDPportAddress := "127.0.0.1:" + strconv.Itoa(UDPport)
 	config.Listen = []string{UDPportAddress}
@@ -172,78 +186,79 @@ func StartPeernet(rootNode bool, RunPath string, number int) {
 	config.SearchIndex = RunPath + "/data/search index.txt"
 
 	// if root node send back public key,udp address,webapi
-	if rootNode {
-
-	} else {
-		config.SeedList = []core.PeerSeed{{
-			PublicKey: "",
-			Address:   []string{""},
-		}}
+	if len(*rootNodes) != 0 {
+		var Seeds []core.PeerSeed
+		rootNodeInterate := *rootNodes
+		// Set root nodes to listen to
+		for i, _ := range rootNodeInterate {
+			var Seed core.PeerSeed
+			Seed.PublicKey = hex.EncodeToString(rootNodeInterate[i].NodeConfig.Backend.PeerPublicKey.SerializeCompressed())
+			Seed.Address = rootNodeInterate[i].NodeConfig.Backend.Config.Listen
+			Seeds = append(Seeds, Seed)
+		}
+		// Iterate through all root nodes and generate
+		config.SeedList = Seeds
 	}
 
 	// save configuration
 	err = core.SaveConfig(RunPath+"/Config.yaml", &config)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	// Copy config to the appropriate folder
 	backend, status, err := core.Init("Test framework/1.0", RunPath+"/Config.yaml", nil, nil)
 	if status != core.ExitSuccess {
 		fmt.Printf("Error %d initializing backend: %s\n", status, err.Error())
-		return
+		return nil, err
 	}
 
 	backend.Connect()
 
 	APIport, err := freeport.GetFreePort()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	APIportAddress := "127.0.0.1:" + strconv.Itoa(APIport)
 
-	webapi.Start(backend, []string{APIportAddress}, false, "", "", 0, 0, uuid.Nil)
+	api := webapi.Start(backend, []string{APIportAddress}, false, "", "", 0, 0, uuid.Nil)
+	peernetNode.NodeConfig = api
 
+	// testing reasons
 	fmt.Println(APIportAddress)
+
+	return &peernetNode, nil
 
 }
 
 // Spawn test Peernet instances for testing
 func main() {
-	//1. Create Config function to read configurations
-	//2. Spawn root nodes with Custom configs with a folder structure
-	// with UUID
-	// Test Run 1 ( [/Run1/RootNode1/<config file>],[/Run1/SlaveNode1/<binary>|<config file>]
-	// Start add nodes and manage go routine
-
-	//finish := make(chan bool)
 
 	r := mux.NewRouter()
 
-	//// Get Config information
+	// Get Config information
 	config, err := ConfigInit()
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	// Create Peernet instances based on the config
-	//go func() {
-	//}()
-
+	// TODO: extend for future use-case for a embed dashboard tracker
 	srv := &http.Server{
 		Handler: r,
-		Addr:    "127.0.0.1:8000",
+		Addr:    config.MainServerAddress,
 		// Good practice: enforce timeouts for servers you create!
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
 
-	config.RunManager()
+	manager, err := config.RunManager()
+	if err != nil {
+		fmt.Println(err)
+	}
 
-	// go func() {
+	fmt.Println(len(*manager))
+
+	// Lister for the main server
 	log.Fatal(srv.ListenAndServe())
-	//}()
-
-	//<-finish
 }
