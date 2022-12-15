@@ -2,4 +2,5 @@ config.json
 runs/
 Peernet-test-framework
 Peernet-test-framework.exe
-
+.idea/
+.DS_Store
