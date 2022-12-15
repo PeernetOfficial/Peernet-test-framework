@@ -12,11 +12,7 @@ automatically points the regular nodes to root node.
 
 The setup is intended to be as simple as possible.
 ```
-Go build .
-```
-Run:
-```
-./Peernet-test-framework
+go get github.com/PeernetOfficial/core@PublicPeerSeed
 ```
 
 Extend to your Go project (Sample Program to spawn Peernet nodes based on default settings)
@@ -54,4 +50,10 @@ fmt.Println(len(*manager))
 // Lister for the main server
 log.Fatal(srv.ListenAndServe())
 }
+```
+
+Run:
+```
+go build .
+./Peernet-test-framework
 ```
