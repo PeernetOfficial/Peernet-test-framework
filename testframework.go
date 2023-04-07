@@ -1,4 +1,4 @@
-package main
+package testframework
 
 import (
 	"encoding/hex"
@@ -6,11 +6,9 @@ import (
 	"github.com/PeernetOfficial/core"
 	"github.com/PeernetOfficial/core/webapi"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/phayes/freeport"
 	"github.com/spf13/viper"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -100,7 +98,7 @@ func ConfigInit() (*Config, error) {
 }
 
 // RunManager Starts Peernet test network for testing
-func (c *Config) RunManager() (*[]PeernetNode, error) {
+func (c *Config) RunManager() ([]PeernetNode, error) {
 	// Create runs folder if it does not exist
 	os.Mkdir("runs", os.ModePerm)
 
@@ -137,7 +135,7 @@ func (c *Config) RunManager() (*[]PeernetNode, error) {
 		peernetNodes = append(peernetNodes, *peernetNode)
 	}
 
-	return &peernetNodes, nil
+	return peernetNodes, nil
 
 }
 
@@ -191,7 +189,7 @@ func StartPeernet(rootNodes *[]PeernetNode, RunPath string, number int) (*Peerne
 		var Seeds []core.PeerSeed
 		rootNodeInterate := *rootNodes
 		// Set root nodes to listen to
-		for i, _ := range rootNodeInterate {
+		for i := range rootNodeInterate {
 			var Seed core.PeerSeed
 			Seed.PublicKey = hex.EncodeToString(rootNodeInterate[i].NodeConfig.Backend.PeerPublicKey.SerializeCompressed())
 			Seed.Address = rootNodeInterate[i].NodeConfig.Backend.Config.Listen
@@ -232,35 +230,4 @@ func StartPeernet(rootNodes *[]PeernetNode, RunPath string, number int) (*Peerne
 
 	return &peernetNode, nil
 
-}
-
-// Spawn test Peernet instances for testing
-func main() {
-
-	r := mux.NewRouter()
-
-	// Get Config information
-	config, err := ConfigInit()
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	// TODO: extend for future use-case for a embed dashboard tracker
-	srv := &http.Server{
-		Handler: r,
-		Addr:    config.MainServerAddress,
-		// Good practice: enforce timeouts for servers you create!
-		WriteTimeout: 15 * time.Second,
-		ReadTimeout:  15 * time.Second,
-	}
-
-	manager, err := config.RunManager()
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	fmt.Println(len(*manager))
-
-	// Lister for the main server
-	log.Fatal(srv.ListenAndServe())
 }

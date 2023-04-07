@@ -22,7 +22,7 @@ Run:
 Extend to your Go project (Sample Program to spawn Peernet nodes based on default settings)
 ```go
 import (
-    testframework "github.com/PeernetOfficial/Peernet-test-framework"
+    "github.com/PeernetOfficial/Peernet-test-framework"
     "github.com/gorilla/mux"
 )
 

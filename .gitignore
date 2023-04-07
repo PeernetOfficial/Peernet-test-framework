@@ -4,3 +4,5 @@ Peernet-test-framework
 Peernet-test-framework.exe
 .idea/
 .DS_Store
+*.mp4
+TestAddFile
